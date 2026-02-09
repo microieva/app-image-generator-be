@@ -1,48 +1,55 @@
 from fastapi import FastAPI
 from sqlalchemy import delete
-from app.core import model_loader
+from datetime import datetime
+from app.events.db_events import delete_all_tasks
 from app.models.db_models import Image, Task
-from app.utils.database import get_session
+from app.core.database import get_session
+import logging
 
-def delete_tasks_and_images_from_db():
-    db_session = None
-    try:
-        db_session = get_session() 
-        
-        stmt_images = delete(Image)
-        result_images = db_session.execute(stmt_images)
-        db_session.commit()
-        print(f"🗑️  Deleted {result_images.rowcount} rows from images table")
-        
-        stmt_tasks = delete(Task)
-        result_tasks = db_session.execute(stmt_tasks)
-        db_session.commit()
-        print(f"🗑️  Deleted {result_tasks.rowcount} rows from tasks table")
-    
-    except Exception as e:
-        print(f"❌ Error during cleanup: {str(e)}")
-        if db_session:
-            db_session.rollback()
-        
-    finally:
-        if db_session:
-            db_session.close()
-
+logger = logging.getLogger(__name__)
 
 async def midnight_cleanup(app: FastAPI):
-    """Scheduled function to delete all tasks every midnight"""
+    logger.info("🕛 Starting midnight cleanup...")
 
-    task_manager = app.state.task_manager
-    cancel_result = task_manager.cancel_all()
-    print(f"📊 Cancellation result: {cancel_result}")
+    try:
+        success = delete_all_tasks()
+        logger.info(f"Midnight cleanup - Database: {success}")
+    except Exception as e:
+        logger.error(f"Midnight cleanup - Database cleanup failed: {e}")
     
-    delete_result = task_manager.delete_all()
-    print(f"📊 Deletion result: {delete_result}")
+    result = {
+        "message": "Midnight cleanup completed",
+        "timestamp": datetime.now().isoformat(),
+    }
+    
+    logger.info(f"✅ Midnight cleanup completed: {result}")
+    return result
 
-    model_loader.cleanup()
-
-
-def db_weekly_cleanup(app: FastAPI):
-    """Scheduled function to delete all tasks every midnight"""
-    delete_tasks_and_images_from_db()
-
+async def db_weekly_cleanup(app: FastAPI):
+    logger.info("🗓️ Starting weekly database cleanup...")
+    
+    results = {}
+    
+    try:
+        async with get_session() as session:
+            stmt_images = delete(Image)
+            result_images = await session.execute(stmt_images)
+            
+            stmt_tasks = delete(Task)
+            result_tasks = await session.execute(stmt_tasks)
+            
+            await session.commit()
+            
+            results["images_deleted"] = result_images.rowcount
+            results["tasks_deleted"] = result_tasks.rowcount
+            results["timestamp"] = datetime.now().isoformat()
+            
+    except Exception as e:
+        logger.error(f"Error during weekly database cleanup: {e}")
+        await session.rollback()
+        raise
+    finally:
+        await session.close()
+    
+    logger.info(f"✅ Weekly cleanup completed: {results}")
+    return results

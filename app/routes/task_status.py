@@ -1,44 +1,33 @@
 
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse
-from app.core.task_manager import TaskManager, TaskStatus
-from app.models.image_models import TaskStatusResponse
+from fastapi import APIRouter, Depends, HTTPException
+from requests import Session
+from app.events.db_events import  get_task_info
+from app.models.db_models import TaskStatus
+from app.schemas.schemas import TaskStatusResponse
+from app.core.database import get_db
 
 router = APIRouter()
 
 @router.get("/status/{task_id}", response_model=TaskStatusResponse)
-async def get_generation_status(request: Request, task_id: str):
-    """Check the status of a generation task"""
-    task_manager: TaskManager = request.app.state.task_manager
-    
-    print(f"🔍 Status check for task {task_id}")
-    all_tasks = task_manager.list_all_tasks()
-    print(f"📊 Available tasks: {list(all_tasks.keys())}")
+async def get_generation_status(task_id: str, db: Session = Depends(get_db)):
+    try:
+        task_info = get_task_info(task_id, db)
 
-    task_info = task_manager.get_task_info(task_id)
+        task_data = {
+            'task_id': task_id,
+            'status': task_info.status,
+            'progress': task_info.progress,
+            'created_at': task_info.created_at,
+            'cancelled': task_info.status == TaskStatus.CANCELLED,
+            'prompt': task_info.prompt
+        }
     
-    if not task_info:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    task_data = {
-        'status': task_info.status,
-        'progress': task_info.progress,
-        'created_at': task_info.created_at,
-        'started_at': task_info.started_at,
-        'completed_at': task_info.completed_at,
-        'cancelled': task_info.status == TaskStatus.CANCELLED,
-        'prompt': task_info.prompt,
-        'result': task_info.result is not None
-    }
-    
-    return JSONResponse({
-        "task_id": task_id,
-        "status": task_data['status'],
-        "progress": task_data.get('progress'),
-        "created_at": task_data['created_at'],
-        "started_at": task_data.get('started_at'),
-        "completed_at": task_data.get('completed_at'),
-        "cancelled": task_data.get('cancelled', False),
-        "result": task_data.get('result', False),
-        "prompt": task_data['prompt']
-    })
+        return TaskStatusResponse(**task_data)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail={"message": f"Failed to fetch task status: {str(e)}"}
+        )

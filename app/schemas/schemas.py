@@ -1,26 +1,23 @@
 from pydantic import BaseModel
 from typing import Optional
-from pydantic import BaseModel
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from datetime import datetime
 
 class GenerateRequest(BaseModel):
     prompt: str
     negative_prompt: Optional[str] = None
+    num_inference_steps: Optional[int] = 20
+    guidance_scale: Optional[float] = 7.5
     width: int = 512
     height: int = 512
-    num_inference_steps: int = 50
-    guidance_scale: float = 7.5
-    steps: int = 20
     seed: Optional[int] = None
+
 
 class ImagesParams(BaseModel):
     page: int = 1
     limit: int = 12 
     task_id: Optional[str] = None
 
-class CancelRequest(BaseModel):
-    task_id: str
 
 class GenerationStatus(BaseModel):
     task_id: str
@@ -41,8 +38,13 @@ class GenerationStatus(BaseModel):
 
 class GenerationResult(BaseModel):
     task_id: str
-    image_url: str        
+    image_data: str        
     prompt: str
+    total_inference_time: Optional[float] = None
+    completed_at: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
 
 class ImageResponse(BaseModel):
     id: int
@@ -61,12 +63,13 @@ class ImagesSliceResponse(BaseModel):
     length: int
     slice: Optional[list[ImageResponse]] = None
 
-class TaskResponse(BaseModel):
-    id: int
+class TaskData(BaseModel):
     task_id: str
     progress: int
     prompt: str
+    status: str
     created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -76,17 +79,16 @@ class TaskResponse(BaseModel):
 
 class TasksResponse(BaseModel):
     total_tasks: int
-    tasks: Optional[list[TaskResponse]] = None
+    tasks: Optional[list[TaskData]] = None
+    class Config:
+        from_attributes = True
 
 class TaskStatusResponse(BaseModel):
     task_id: str
     status: str
     progress: int
     created_at: datetime
-    started_at: datetime
-    completed_at: datetime
     cancelled: bool
-    result: Optional[GenerationResult]
     prompt: str
 
     class Config:
@@ -108,6 +110,10 @@ class GenerationResponse(BaseModel):
         }
 
 class CancellationResponse(BaseModel):
-    status: str
+    success: bool
     message: str
     task_id: str
+
+class DeletionResponse(BaseModel):
+    success: bool
+    message: str

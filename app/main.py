@@ -1,12 +1,11 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.core import shutdown_manager
-from app.utils import lifespan
-from .config import DEVICE, EXECUTOR
-from .routes import generate_image, cancel_generation, get_generation_stream, get_images, get_tasks, get_generation_status, delete_tasks
+from app.core import shutdown_manager, lifespan
+from .routes import (generate_image, get_generation_stream, 
+                     get_generation_status, cancel_generation,
+                     delete_tasks, get_tasks, get_images)
 
-print(f"\n🚀 Using device: {DEVICE.upper()}")
 
 shutdown_manager.setup_signal_handlers()
 
@@ -17,14 +16,11 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000", 
         "http://localhost:3001", 
-        "https://react-image-generator-kappa.vercel.app", 
         "http://172.20.10.5:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.state.executor = EXECUTOR
 
 app.include_router(generate_image)
 app.include_router(get_generation_stream)

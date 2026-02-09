@@ -1,25 +1,57 @@
-# Core (CUDA 11.8 for Py3.9 compatibility)
-torch==2.0.1+cu118
-torchvision==0.15.2+cu118
---extra-index-url https://download.pytorch.org/whl/cu118
+# ============ FASTAPI & WEB SERVER ============
+fastapi==0.104.1                    # Latest stable, improved features
+uvicorn[standard]==0.24.0          # Updated with optional extras
+sse-starlette==1.6.5               # Keep for SSE streams
+starlette==0.27.0                  # FastAPI dependency
 
-diffusers==0.19.3
-transformers==4.31.0
-accelerate==0.21.0
-huggingface-hub==0.16.4
+# ============ REMOTE API CLIENT ============
+httpx==0.25.1                      # Async HTTP client for remote API calls
+tenacity==8.2.3                    # Retry logic for network failures
+aiofiles==23.2.1                   # Async file operations
+pydantic-settings==2.1.0           # For settings management (replaces dotenv)
+python-dotenv==1.0.0               # Keep for legacy .env support
+huggingface-hub
+requests               
+gradio_client
+aiohttp==3.9.4                 
 
-fastapi==0.95.2
-uvicorn==0.22.0
 
-numpy==1.23.5 
-pillow==9.5.0
-sse-starlette>=1.6.5
+# ============ DATABASE & ORM ============
+sqlalchemy[asyncio]==2.0.23        # Async SQLAlchemy support
+alembic==1.12.1                    # Database migrations
+pyodbc==4.0.39                     # SQL Server driver (keep for your setup)
+# aioodbc==2.0.0                     # Async ODBC for SQL Server (optional)
+# asyncpg==0.29.0                  # Alternative for PostgreSQL async
+# aiosqlite==0.19.0                # Alternative for SQLite async
 
-apscheduler==3.10.4
-fastapi-pagination==0.14.1
+# ============ IMAGE PROCESSING ============
+Pillow==10.1.0                     # Updated for image manipulation
+numpy==1.24.3                      # Lightweight, still needed for Pillow ops
+python-multipart==0.0.6            # For file uploads if needed
 
-sqlalchemy==2.0.23
-pyodbc==4.0.39
-python-dotenv==1.0.0
-alembic==1.12.1
-starlette==0.27.0
+# ============ SCHEDULING & BACKGROUND TASKS ============
+apscheduler==3.10.4                # Keep for scheduled cleanup
+asyncio-throttle==1.0.2            # Rate limiting for API calls
+celery==5.3.4                      # Optional: For distributed task queue
+redis==5.0.1                       # Optional: For Celery broker
+
+# ============ CONFIGURATION & VALIDATION ============
+pydantic==2.5.0                    # Updated for better validation
+pyyaml==6.0.1                      # For YAML config files if needed
+
+# ============ MONITORING & LOGGING ============
+structlog==23.1.0                  # Structured logging
+python-json-logger==2.0.7          # JSON formatted logs
+prometheus-client==0.18.0          # Metrics collection (optional)
+
+# ============ UTILITIES ============
+python-dateutil==2.8.2             # Date parsing
+typing-extensions==4.8.0           # Type hints support
+colorama==0.4.6                    # Colored console output (dev)
+tqdm==4.66.1                       # Progress bars (optional)
+
+# ============ TESTING (Optional) ============
+pytest==7.4.3                      # Testing framework
+pytest-asyncio==0.21.1             # Async testing support
+httpx-sse==0.4.0                   # SSE client for testing
+pytest-cov==4.1.0                  # Test coverage

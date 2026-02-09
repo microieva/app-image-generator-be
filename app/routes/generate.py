@@ -1,144 +1,123 @@
-from io import BytesIO
-from fastapi.responses import JSONResponse
 from datetime import datetime
-import torch
-import base64
-from fastapi import APIRouter, BackgroundTasks, Depends, Request
-from app.config import DEVICE
-from app.core.model_loader import model_loader
-from app.events.db_events import save_image_to_db, save_task_to_db
-from app.models import GenerateRequest
-from app.core.task_manager import TaskManager, TaskStatus
-from app.models.image_models import GenerationResponse
-from app.utils.database import get_db
-from app.utils.image_processing import resize_image_base64
+import time
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+import requests
+from requests.exceptions import Timeout, RequestException, HTTPError, ConnectionError
+
+from app.events.db_events import save_task_to_db
+from app.schemas.schemas import GenerateRequest, GenerationResponse
+from app.core.database import get_db
+from app.core.config import settings
+from app.schemas.errors import SpaceAPIError
 
 router = APIRouter()
-pipe = model_loader.get_model()
 
-def generate_image_task(app, task_id: str, generate_request: GenerateRequest, db: Session = Depends(get_db)):
-    """Background task for image generation"""
-    task_manager: TaskManager = app.state.task_manager
-    
-    try:
-        current_info = task_manager.get_task_info(task_id)
-        if current_info and current_info.status != TaskStatus.PROCESSING:
-            task_manager.update_task_status(task_id, TaskStatus.PROCESSING)
-            print(f"🔄 Status corrected to PROCESSING for task {task_id}")
+@router.post("/generate")
+async def generate_image(
+    generate_request: GenerateRequest,
+    db: Session = Depends(get_db),
+    timeout:int = settings.REQUEST_TIMEOUT
+):
+  try:
+    if not generate_request.prompt or generate_request.prompt.strip() == "":
+      raise HTTPException(
+          status_code=400,
+          detail={"message": "Prompt cannot be empty"}
+      )
         
-        generator = torch.Generator(DEVICE)
-        if generate_request.seed:
-            generator.manual_seed(generate_request.seed)
-
-        def callback(step: int, timestep: int, latents: torch.FloatTensor):
-            """Callback function to check for cancellation"""
-            current_info = task_manager.get_task_info(task_id)
-            if not current_info or current_info.status == TaskStatus.CANCELLED:
-                print(f"⏹️ Cancellation detected in callback for task {task_id}")
-                raise InterruptedError("Generation cancelled by user")
-            
-            progress = (step / generate_request.steps) * 100
-            task_manager.update_task_progress(task_id, round(progress, 2))
-            
-            if step % 10 == 0:
-                prompt = generate_request.prompt[:50] + "..." if len(generate_request.prompt) > 50 else generate_request.prompt
-                print(f"📊 Task {task_id} progress: {progress:.1f}% - '{prompt}'")
-
-        image = pipe(
-            prompt=generate_request.prompt,
-            num_inference_steps=generate_request.steps,
-            guidance_scale=generate_request.guidance_scale,
-            generator=generator,
-            callback=callback,
-            callback_steps=1
-        ).images[0]
-
-        buffered = BytesIO()
-        image.save(buffered, format="PNG")
-        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-
-        resized_base64 = resize_image_base64(
-            base64_string=img_str, 
-            max_width=1024, 
-            max_height=1024
-        )
-
-        result = {
-            "task_id": task_id,
-            "image_url": resized_base64,
-            "prompt": generate_request.prompt,
+    if generate_request.width % 8 != 0 or generate_request.height % 8 != 0:
+      raise HTTPException(
+          status_code=400,
+          detail={"message": "Width and height must be divisible by 8"}
+      )
+    
+    if generate_request.prompt:
+      health_response = requests.get(
+        f"{settings.HF_SPACE_URL}/health",
+        headers={
+          "Authorization": f"Bearer {settings.HF_TOKEN}"
         }
-        task_manager.mark_task_completed(task_id, result)
-        db_gen = get_db()
-        db = next(db_gen)
-        try:
-            save_image_to_db(result, db)  
-        finally:
-            try:
-                next(db_gen)
-            except StopIteration:
-                pass
-
-        
-        print(f"✅ Task {task_id} completed & saved successfully")
-
-    except InterruptedError:
-        print(f"⏹️ Task {task_id} was cancelled during generation")
-        task_manager.mark_task_cancelled(task_id)
+      )
     
-    except Exception as e:
-        print(f"❌ Error in task {task_id}: {e}")
-        import traceback
-        traceback.print_exc()
-        task_manager.mark_task_error(task_id, str(e))
-    
-    finally:
-        final_info = task_manager.get_task_info(task_id)
-        if final_info:
-            print(f"🏁 Task {task_id} final status: {final_info.status}")
-
-@router.post("/generate", response_model=GenerationResponse)
-async def generate_image(request: Request, generate_request: GenerateRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Endpoint to start image generation using TaskManager only"""
-    try:
-        task_manager: TaskManager = request.app.state.task_manager
-
-        print("\n" + "="*50)
-        print("📨 RECEIVED GENERATION REQUEST:")
-        print(f"Prompt: '{generate_request.prompt}'")
-        print("="*50 + "\n")
-
-        task_id = task_manager.create_task(
-            request=generate_request.dict(),
-            prompt=generate_request.prompt
+      if health_response.status_code != 200:
+        raise SpaceAPIError(
+            f"Space health check failed. Status: {health_response.status_code}"
         )
+    
+    task_id = f"{int(time.time())}"
+    task_data = {
+        "task_id": task_id,
+        "status": "pending",
+        "progress": 0,
+        "prompt": generate_request.prompt
+    }
+    
+    space_request = {
+        "task_id": task_id,
+        "prompt": generate_request.prompt,
+        "negative_prompt": generate_request.negative_prompt or "", 
+        "num_inference_steps": generate_request.num_inference_steps or 20,
+        "guidance_scale": generate_request.guidance_scale or 7.5,
+        "width": generate_request.width or 512,
+        "height": generate_request.height or 512,
+        "seed": generate_request.seed or None
+    }
         
-        print(f"📝 Task created with ID: {task_id}")
-        print(f"   Initial status: {task_manager.get_task_info(task_id).status}")
-        
-        background_tasks.add_task(generate_image_task, request.app, task_id, generate_request, request)
-        task_manager.update_task_status(task_id, TaskStatus.PROCESSING)
+    space_request = {k: v for k, v in space_request.items() if v is not None}
+    
+    generate_response = requests.post(
+      f"{settings.HF_SPACE_URL}/generate",
+      json=space_request,
+      headers={
+          "Content-Type": "application/json",
+          "Authorization": f"Bearer {settings.HF_TOKEN}"
+      },
+      timeout=timeout
+    )
 
-        task_info = task_manager.get_task_info(task_id)
-        save_task_to_db(task_info, db)
-        
-        print(f"✅ Task {task_id} started via TaskManager")
-        print(f"   Status: {task_manager.get_task_info(task_id).status}")
-        print(f"   Total ongoing tasks: {task_manager.count}")
-        
-        return JSONResponse({
-            "status": "started",
-            "task_id": task_id,
-            "message": "Generation started in background",
-            "created_at": datetime.now().isoformat()
-        })
-        
-    except Exception as e:
-        print(f"❌ ERROR in generate endpoint: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)}
-        )      
+    response_json = generate_response.json()
+
+    response_data = {
+        "status": response_json.get('status', 'unknown'),
+        "task_id": response_json.get('task_id', task_id), 
+        "message": response_json.get('message', ''),
+        "created_at": datetime.now().isoformat()
+    }
+
+    save_task_to_db(task_data, db)
+
+    return GenerationResponse(**response_data)
+  
+  except Timeout as e:
+    raise SpaceAPIError(f"Space API request timed out after {timeout} seconds")
+  
+  except HTTPError as e:
+    status_code = e.response.status_code if hasattr(e, 'response') else None
+    response_text = e.response.text if hasattr(e, 'response') else str(e)
+    
+    if status_code == 401:
+        raise SpaceAPIError("Invalid or expired authentication token")
+    elif status_code == 403:
+        raise SpaceAPIError("Access forbidden to Space API")
+    elif status_code == 404:
+        raise SpaceAPIError("Space API endpoint not found")
+    elif status_code == 429:
+        raise SpaceAPIError("Rate limit exceeded for Space API")
+    elif 500 <= status_code < 600:
+        raise SpaceAPIError(f"Space API server error: {status_code}")
+    else:
+        raise SpaceAPIError(f"Space API HTTP error {status_code}: {response_text}")
+  
+  except ConnectionError as e:
+      raise SpaceAPIError(f"Failed to connect to Space API: {str(e)}")
+      
+  except RequestException as e:
+      raise SpaceAPIError(f"Space API request failed: {str(e)}")
+      
+  except ValueError as e:
+      raise SpaceAPIError("Invalid JSON response from Space API")
+      
+  except Exception as e:
+      raise SpaceAPIError(f"Unexpected error: {str(e)}")
+

@@ -1,6 +1,14 @@
-from .task_manager import TaskManager
 from .scheduler import TaskScheduler
-from .model_loader import ModelLoader, load_model, ModelLoader, model_loader, cleanup_models
-from .shutdown_manager import shutdown_manager
+from .shutdown_manager import shutdown_manager, get_shutdown_manager
+from .config import settings
+from .database import get_db
+from .lifespan import lifespan
 
-__all__ = ['shutdown_manager','TaskManager','TaskScheduler', 'ModelLoader', 'load_model', 'model_loader','cleanup_models']
+__all__ = [
+  'shutdown_manager',
+  'TaskScheduler', 
+  'get_shutdown_manager',
+  'settings',
+  'get_db',
+  'lifespan'
+  ]

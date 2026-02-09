@@ -1,75 +1,42 @@
 import logging
-from app.core.task_manager import TaskManager, TaskStatus
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse
-from app.models.image_models import CancelRequest, CancellationResponse
+from fastapi import APIRouter
+import requests
+from app.schemas.schemas import CancellationResponse
+from app.core.config import settings
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
-@router.post("/cancel-generation", response_model=CancellationResponse)
-async def cancel_generation(request: Request, cancel_request: CancelRequest):
-    """Endpoint to cancel an ongoing generation with detailed response"""
+@router.post("/cancel-generation/{task_id}", response_model=CancellationResponse)
+async def cancel_generation(task_id:str):
 
-    task_manager: TaskManager = request.app.state.task_manager
-    task_id = cancel_request.task_id
-
-    print(f"\n⏹️ Cancellation request for task: {task_id}")
-
-    task_info = task_manager.get_task_info(task_id)
-    
-    if not task_info:
-        raise HTTPException(
-            status_code=404, 
-            detail={
-                "message": "Task not found",
-                "task_id": task_id,
-                "suggestion": "Check /tasks endpoint for available tasks"
-            }
+    try:    
+        cancel_response = requests.post(
+            f"{settings.HF_SPACE_URL}/cancel-generation/{task_id}",
+            headers={
+                "Authorization": f"Bearer {settings.HF_TOKEN}"
+            },
+            timeout=10
         )
-
-    if task_info.status == TaskStatus.CANCELLED:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "message": "Task already cancelled",
-                "task_id": task_id,
-                "current_status": TaskStatus.CANCELLED
-            }
+        
+        if cancel_response.status_code == 200:
+            return CancellationResponse(
+                success=True,
+                message=f"Generation task {task_id} cancelled successfully",
+                task_id=task_id
+            )
+        else:
+            return CancellationResponse(
+                success=False,
+                message=f"Failed to cancel generation task {task_id}. Status code: {cancel_response.status_code}",
+                task_id=task_id
+            )
+    except Exception as e:
+        logger.error(f"❌ Error cancelling generation task: {e}")
+        import traceback
+        traceback.print_exc()
+        return CancellationResponse(
+            success=False,
+            message=f"Error cancelling generation task: {str(e)}",
+            task_id=task_id
         )
-    
-    if task_info.status == TaskStatus.COMPLETED:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "message": "Task already completed",
-                "task_id": task_id,
-                "current_status": TaskStatus.COMPLETED,
-                "result_available": task_info.result is not None
-            }
-        )
-    
-    if task_info.status == TaskStatus.ERROR:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "message": "Task already failed",
-                "task_id": task_id,
-                "current_status": TaskStatus.ERROR,
-                "error": task_info.error
-            }
-        )
-
-    cancellation_successful = task_manager.cancel_task(task_id)
-    
-    if cancellation_successful:
-        logging.info(f"Successfully cancelled task {task_id} - Prompt: {task_info.prompt}")
-        message = "Task cancelled successfully"
-    else:
-        logging.warning(f"Task {task_id} could not be cancelled (may have completed during request)")
-        message = "Task cancellation attempted, but it may have already completed"
-
-    return JSONResponse({
-        "status": "success",
-        "message": message,
-        "task_id": task_id
-    })

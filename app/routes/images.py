@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from requests import Session
 from app.models.db_models import Image
-from app.models.image_models import ImagesParams, ImagesSliceResponse
-from app.utils.database import get_db
+from app.schemas.schemas import ImagesParams, ImagesSliceResponse
+from app.core.database import get_db
 
 router = APIRouter()
 
@@ -11,9 +11,6 @@ async def get_images(
     images_params: ImagesParams = Depends(),  
     db: Session = Depends(get_db)
 ):
-    """
-    Get a slice of images with custom pagination. Returns {length: total_count, slice: images_array}
-    """
     try:
         query = db.query(Image).order_by(Image.created_at.desc())
         

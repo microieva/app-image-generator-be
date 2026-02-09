@@ -1,50 +1,75 @@
 import signal
 import asyncio
+import logging
 from typing import Callable, List
+from contextlib import AsyncExitStack
+
+logger = logging.getLogger(__name__)
 
 class ShutdownManager:
     def __init__(self):
         self.is_shutting_down = False
         self.cleanup_handlers: List[Callable] = []
+        self._exit_stack = AsyncExitStack()
+        logger.info("ShutdownManager initialized")
         
     def add_cleanup_handler(self, handler: Callable):
-        """Add a cleanup function to be called on shutdown"""
         if handler not in self.cleanup_handlers:
             self.cleanup_handlers.append(handler)
-            print(f"✅ Registered cleanup handler: {handler.__name__}")
+            logger.debug(f"Registered cleanup handler: {handler.__name__}")
         
     async def run_cleanup(self):
-        """Run all cleanup handlers asynchronously"""
         if self.is_shutting_down:
             return
             
         self.is_shutting_down = True
-        print("🛑 Running cleanup handlers...")
+        logger.info("Running cleanup handlers...")
         
-        for handler in self.cleanup_handlers:
+        for handler in reversed(self.cleanup_handlers):
             try:
+                logger.debug(f"Executing cleanup handler: {handler.__name__}")
+                
                 if asyncio.iscoroutinefunction(handler):
                     await handler()
                 else:
-                    handler()  # Call synchronous functions directly
-                print(f"✅ Cleanup handler executed: {handler.__name__}")
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(None, handler)
+                    
+                logger.debug(f"Cleanup handler completed: {handler.__name__}")
+                
             except Exception as e:
-                print(f"❌ Cleanup handler failed: {e}")
+                logger.error(f"Cleanup handler {handler.__name__} failed: {e}")
+        
+        await self._exit_stack.aclose()
+        logger.info("Cleanup completed")
     
     def setup_signal_handlers(self):
-        """Setup signal handlers for graceful shutdown"""
         def signal_handler(signum, frame):
-            print(f"🛑 Received signal {signum}, initiating shutdown...")
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            logger.info(f"Received signal {signum}, initiating graceful shutdown...")
+            
             try:
-                loop.run_until_complete(self.run_cleanup())
-            finally:
-                loop.close()
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(self.run_cleanup())
+                else:
+                    loop.run_until_complete(self.run_cleanup())
+            except (RuntimeError, Exception) as e:
+                logger.error(f"Error during shutdown: {e}")
                 exit(0)
         
-        signal.signal(signal.SIGINT, signal_handler)  
-        signal.signal(signal.SIGTERM, signal_handler) 
-        print("✅ Signal handlers registered")
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        logger.info("Signal handlers registered (SIGINT, SIGTERM)")
+
+    async def aenter_context(self, cm):
+        """Enter an async context manager and register for cleanup."""
+        return await self._exit_stack.enter_async_context(cm)
+    
+    def register_async_resource(self, coro):
+        """Register an async resource cleanup."""
+        self._exit_stack.push_async_callback(coro)
 
 shutdown_manager = ShutdownManager()
+
+async def get_shutdown_manager() -> ShutdownManager:
+    return shutdown_manager

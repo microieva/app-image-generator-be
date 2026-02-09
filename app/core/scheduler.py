@@ -56,3 +56,5 @@ class TaskScheduler:
         if self.scheduler:
             self.scheduler.shutdown()
             logger.info("🛑 Task scheduler shut down successfully")
+
+scheduler = TaskScheduler()

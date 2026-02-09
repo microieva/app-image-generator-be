@@ -14,14 +14,12 @@ SessionLocal = None
 Base = declarative_base()
 
 def get_engine():
-    """Get or create the database engine (lazy initialization)"""
     global engine
     if engine is None:
         engine = create_engine_with_retry()
     return engine
 
 def get_session():
-    """Get a database session"""
     global SessionLocal
     if SessionLocal is None:
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
@@ -98,7 +96,6 @@ def create_engine_with_retry(max_retries=3, retry_delay=2):
                 f'Connection Timeout=30;'
             )
             
-            # URL encode it for SQLAlchemy
             odbc_connect_str = quote_plus(pyodbc_conn_str)
             connection_string = f"mssql+pyodbc://?odbc_connect={odbc_connect_str}"
             
@@ -115,18 +112,15 @@ def create_engine_with_retry(max_retries=3, retry_delay=2):
                 current_db = result.scalar()
                 print(f"✅ Successfully connected to database: {current_db}")
                 
-                # Test basic query
                 conn.execute(text("SELECT 1"))
             
             return engine
             
         except pyodbc.ProgrammingError as e:
-            # Check if this is a "database not found" error (4060)
             if '4060' in str(e) and not database_created:
                 print(f"📋 Database not found error detected. Attempting to create database...")
                 if create_database_if_not_exists(db_server, db_port, db_user, db_password, db_name, driver_name):
                     database_created = True
-                    # Continue to next attempt which should now succeed
                     if attempt < max_retries - 1:
                         print(f"🔄 Retrying connection with newly created database...")
                         continue
