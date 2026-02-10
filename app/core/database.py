@@ -5,7 +5,6 @@ import time
 from dotenv import load_dotenv
 from sqlalchemy.ext.declarative import declarative_base
 from urllib.parse import quote_plus
-import pyodbc
 from app.core.config import settings
 
 load_dotenv()
@@ -16,6 +15,15 @@ Base = declarative_base()
 
 IS_PRODUCTION = settings.is_production
 IS_DEVELOPMENT = not IS_PRODUCTION
+
+if IS_DEVELOPMENT:
+    try:
+        import pyodbc
+    except ImportError:
+        print("⚠️  pyodbc not installed - SQL Server support disabled")
+        pyodbc = None
+else:
+    pyodbc = None
 
 def get_engine():
     global engine

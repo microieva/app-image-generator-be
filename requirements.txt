@@ -19,7 +19,8 @@ aiohttp==3.9.4
 # ============ DATABASE & ORM ============
 sqlalchemy[asyncio]==2.0.23        # Async SQLAlchemy support
 alembic==1.12.1                    # Database migrations
-pyodbc==4.0.39                     # SQL Server driver (keep for your setup)
+pyodbc==4.0.39  
+asyncpg==0.29.0               
 # aioodbc==2.0.0                     # Async ODBC for SQL Server (optional)
 # asyncpg==0.29.0                  # Alternative for PostgreSQL async
 # aiosqlite==0.19.0                # Alternative for SQLite async
