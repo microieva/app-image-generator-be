@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI):
     from app.core.database import initialize_database
 
     app.state.scheduler = TaskScheduler() 
-    
+
     await initialize_database()
 
     app.state.scheduler.start_midnight_scheduler(app, midnight_cleanup)
@@ -23,7 +23,6 @@ async def lifespan(app: FastAPI):
     logger.info("✅ Application startup complete")
     
     yield  
-    
 
     logger.info("🛑 Application shutting down...")
     if hasattr(app.state, 'scheduler'):

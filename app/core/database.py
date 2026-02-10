@@ -6,12 +6,16 @@ from dotenv import load_dotenv
 from sqlalchemy.ext.declarative import declarative_base
 from urllib.parse import quote_plus
 import pyodbc
+from app.core.config import settings
 
 load_dotenv()
 
 engine = None
 SessionLocal = None
 Base = declarative_base()
+
+IS_PRODUCTION = settings.is_production
+IS_DEVELOPMENT = not IS_PRODUCTION
 
 def get_engine():
     global engine
@@ -25,16 +29,83 @@ def get_session():
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
     return SessionLocal()
 
-def create_database_if_not_exists():
-    """Create the database if it doesn't exist"""
+def create_postgresql_engine():
+    """Create PostgreSQL engine for production"""
+    db_user = settings.DB_USER
+    db_password = settings.DB_PASSWORD
+    db_host = settings.DB_SERVER
+    db_port = settings.DB_PORT
+    db_name = settings.DB_NAME
+    
+    print(f"🔧 Creating PostgreSQL connection...")
+    print(f"   Host: {db_host}:{db_port}")
+    print(f"   Database: {db_name}")
+    print(f"   User: {db_user}")
+    
+    connection_string = f"postgresql://{db_user}:{quote_plus(db_password)}@{db_host}:{db_port}/{db_name}"
+    
+    engine = create_engine(
+        connection_string,
+        pool_pre_ping=True,
+        pool_size=10,
+        max_overflow=20,
+        echo=False
+    )
+    
+    return engine
 
-    db_user = os.getenv('DB_USER', 'sa')
-    db_password = os.getenv('DB_PASSWORD')
-    db_server = os.getenv('DB_SERVER', 'localhost')
-    db_port = os.getenv('DB_PORT', '1433')
-    db_name = os.getenv('DB_NAME', 'ImageGeneratorDB')
+def create_sqlserver_engine():
+    """Create SQL Server engine for development"""
+    db_user = settings.DB_USER
+    db_password = settings.DB_PASSWORD
+    db_server = settings.DB_SERVER
+    db_port = settings.DB_PORT
+    db_name = settings.DB_NAME
+    
     drivers = [d for d in pyodbc.drivers() if 'ODBC Driver' in d and 'SQL Server' in d]
     driver_name = sorted(drivers)[-1] if drivers else 'ODBC Driver 17 for SQL Server'
+    
+    print(f"🔧 Creating SQL Server connection...")
+    print(f"   Server: {db_server}:{db_port}")
+    print(f"   Database: {db_name}")
+    print(f"   User: {db_user}")
+    print(f"   Driver: {driver_name}")
+    
+    pyodbc_conn_str = (
+        f'DRIVER={{{driver_name}}};'
+        f'SERVER={db_server},{db_port};'
+        f'DATABASE={db_name};'
+        f'UID={db_user};'
+        f'PWD={db_password};'
+        f'TrustServerCertificate=yes;'
+        f'Connection Timeout=30;'
+    )
+    
+    odbc_connect_str = quote_plus(pyodbc_conn_str)
+    connection_string = f"mssql+pyodbc://?odbc_connect={odbc_connect_str}"
+    
+    engine = create_engine(
+        connection_string,
+        pool_pre_ping=True,
+        echo=False
+    )
+    
+    return engine
+
+def create_database_if_not_exists_sqlserver():
+    """Create SQL Server database if it doesn't exist (development only)"""
+    if IS_PRODUCTION:
+        return True  # PostgreSQL handles this differently
+        
+    db_user = settings.DB_USER
+    db_password = settings.DB_PASSWORD
+    db_server = settings.DB_SERVER
+    db_port = settings.DB_PORT
+    db_name = settings.DB_NAME
+    
+    drivers = [d for d in pyodbc.drivers() if 'ODBC Driver' in d and 'SQL Server' in d]
+    driver_name = sorted(drivers)[-1] if drivers else 'ODBC Driver 17 for SQL Server'
+    
     try:
         master_conn_str = (
             f'DRIVER={{{driver_name}}};'
@@ -70,67 +141,51 @@ def create_database_if_not_exists():
         return False
 
 def create_engine_with_retry(max_retries=3, retry_delay=2):
-    db_user = os.getenv('DB_USER', 'sa')
-    db_password = os.getenv('DB_PASSWORD')
-    db_server = os.getenv('DB_SERVER', 'localhost')
-    db_port = os.getenv('DB_PORT', '1433')
-    db_name = os.getenv('DB_NAME', 'ImageGeneratorDB')
-    drivers = [d for d in pyodbc.drivers() if 'ODBC Driver' in d and 'SQL Server' in d]
-    driver_name = sorted(drivers)[-1] if drivers else 'ODBC Driver 17 for SQL Server'
+    """Create engine with retry logic for both production and development"""
     
-    print(f"DB Server: {db_server}")
-    print(f"DB Name: {db_name}")
-    print(f"DB User: {db_user}")
-    
-    database_created = False
-    
-    for attempt in range(max_retries):
-        try:
-            pyodbc_conn_str = (
-                f'DRIVER={{{driver_name}}};'
-                f'SERVER={db_server},{db_port};'
-                f'DATABASE={db_name};'
-                f'UID={db_user};'
-                f'PWD={db_password};'
-                f'TrustServerCertificate=yes;'
-                f'Connection Timeout=30;'
-            )
-            
-            odbc_connect_str = quote_plus(pyodbc_conn_str)
-            connection_string = f"mssql+pyodbc://?odbc_connect={odbc_connect_str}"
-            
-            print(f"🔌 Connection attempt {attempt + 1}/{max_retries}")
-            
-            engine = create_engine(
-                connection_string,
-                pool_pre_ping=True,
-                echo=False
-            )
-            
-            with engine.connect() as conn:
-                result = conn.execute(text("SELECT DB_NAME()"))
-                current_db = result.scalar()
-                print(f"✅ Successfully connected to database: {current_db}")
+    if IS_PRODUCTION:
+        print("🚀 PRODUCTION MODE: Using PostgreSQL")
+        return create_postgresql_engine()
+    else:
+        print("🔧 DEVELOPMENT MODE: Using SQL Server")
+        database_created = False
+        
+        for attempt in range(max_retries):
+            try:
+                engine = create_sqlserver_engine()
                 
-                conn.execute(text("SELECT 1"))
-            
-            return engine
-            
-        except pyodbc.ProgrammingError as e:
-            if '4060' in str(e) and not database_created:
-                print(f"📋 Database not found error detected. Attempting to create database...")
-                if create_database_if_not_exists(db_server, db_port, db_user, db_password, db_name, driver_name):
-                    database_created = True
-                    if attempt < max_retries - 1:
-                        print(f"🔄 Retrying connection with newly created database...")
-                        continue
+                with engine.connect() as conn:
+                    result = conn.execute(text("SELECT DB_NAME()"))
+                    current_db = result.scalar()
+                    print(f"✅ Successfully connected to database: {current_db}")
+                    conn.execute(text("SELECT 1"))
+                
+                return engine
+                
+            except pyodbc.ProgrammingError as e:
+                if '4060' in str(e) and not database_created:
+                    print(f"📋 Database not found error detected. Attempting to create database...")
+                    if create_database_if_not_exists_sqlserver():
+                        database_created = True
+                        if attempt < max_retries - 1:
+                            print(f"🔄 Retrying connection with newly created database...")
+                            continue
+                        else:
+                            print("💥 Failed to connect even after creating database")
+                            raise
                     else:
-                        print("💥 Failed to connect even after creating database")
+                        print("💥 Failed to create database")
                         raise
                 else:
-                    print("💥 Failed to create database")
-                    raise
-            else:
+                    print(f"❌ Connection attempt {attempt + 1}/{max_retries} failed: {e}")
+                    if attempt < max_retries - 1:
+                        print(f"⏳ Retrying in {retry_delay} seconds...")
+                        time.sleep(retry_delay)
+                    else:
+                        print("💥 All connection attempts failed")
+                        raise
+                        
+            except Exception as e:
                 print(f"❌ Connection attempt {attempt + 1}/{max_retries} failed: {e}")
                 if attempt < max_retries - 1:
                     print(f"⏳ Retrying in {retry_delay} seconds...")
@@ -138,17 +193,9 @@ def create_engine_with_retry(max_retries=3, retry_delay=2):
                 else:
                     print("💥 All connection attempts failed")
                     raise
-                    
-        except Exception as e:
-            print(f"❌ Connection attempt {attempt + 1}/{max_retries} failed: {e}")
-            if attempt < max_retries - 1:
-                print(f"⏳ Retrying in {retry_delay} seconds...")
-                time.sleep(retry_delay)
-            else:
-                print("💥 All connection attempts failed")
-                raise
 
 def get_db():
+    """Dependency for FastAPI endpoints (unchanged interface)"""
     db = get_session()
     try:
         yield db
@@ -156,8 +203,13 @@ def get_db():
         db.close()
 
 async def initialize_database():
+    """Initialize database tables based on environment"""
     try:
-        print("🔧 Initializing database connection...")
+        if IS_PRODUCTION:
+            print("🚀 Initializing production database (PostgreSQL)...")
+        else:
+            print("🔧 Initializing development database (SQL Server)...")
+            
         engine = get_engine()
         print("✅ Database engine ready")
         
@@ -167,7 +219,8 @@ async def initialize_database():
         except ImportError as e:
             print(f"❌ Could not import models: {e}")
             print("⚠️  Falling back to manual table creation...")
-            return create_tables_manually(engine)
+            return False
+            #return create_tables_manually(engine)
         
         print("🛠️ Creating tables with SQLAlchemy...")
         Base.metadata.create_all(bind=engine)
@@ -176,10 +229,11 @@ async def initialize_database():
         tables = inspector.get_table_names()
         print(f"-- 📊 Tables in database: {tables}")
         
-        if 'tasks' not in tables or 'images' not in tables:
-            print("⚠️  SQLAlchemy creation failed, using manual fallback...")
-            create_tables_manually(engine)
-            tables = inspector.get_table_names()
+        if IS_DEVELOPMENT:
+            if ('tasks' not in tables or 'images' not in tables):
+                print("⚠️  SQLAlchemy creation failed, using manual fallback...")
+                create_tables_manually(engine)
+                tables = inspector.get_table_names()
         
         for table in ['tasks', 'images']:
             if table in tables:
@@ -192,6 +246,7 @@ async def initialize_database():
     except Exception as e:
         print(f"❌ Database initialization failed: {e}")
         raise
+    
 
 def create_tables_manually(engine):
     """Manual table creation fallback"""
@@ -213,12 +268,12 @@ def create_tables_manually(engine):
             IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='images' AND xtype='U')
             CREATE TABLE images (
                 id INT IDENTITY(1,1) PRIMARY KEY,
-                task_id NVARCHAR(36) UNIQUE NOT NULL,
+                task_id NVARCHAR(36) NULL,
                 image_data NVARCHAR(MAX),
                 prompt NVARCHAR(MAX),
                 created_at DATETIME2 DEFAULT GETDATE(),
                 CONSTRAINT FK_Image_Task FOREIGN KEY (task_id) 
-                REFERENCES tasks(task_id) ON DELETE CASCADE
+                REFERENCES tasks(task_id) ON DELETE SET NULL
             )
         """))
         print("✅ Images table created/verified")

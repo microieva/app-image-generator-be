@@ -1,7 +1,7 @@
 import os
 from pydantic_settings import BaseSettings
 from typing import Optional, List
-from pydantic import Field, validator
+from pydantic import Field, validator, computed_field
 
 
 class Settings(BaseSettings):
@@ -11,17 +11,54 @@ class Settings(BaseSettings):
     APP_HOST: str = Field(default="0.0.0.0", description="Host to bind the application")
     APP_PORT: int = Field(default=8000, description="Port to bind the application")
     DEBUG: bool = Field(default=True, description="Debug mode")
-    
-    # ===== Database Settings (MSSQL) =====
-    DB_SERVER: str = Field(..., description="MSSQL server hostname or IP")
-    DB_PORT: str = Field(default="1433", description="MSSQL server port")
-    DB_NAME: str = Field(..., description="Database name")
-    DB_USER: str = Field(..., description="Database username")
-    DB_PASSWORD: str = Field(..., description="Database password")
-    DB_DRIVER: str = Field(
-        default="ODBC Driver 17 for SQL Server", 
-        description="ODBC driver name for MSSQL"
-    )
+
+    @computed_field
+    @property
+    def DB_SERVER(self) -> str:
+        if settings.is_development:
+            return "localhost"
+        else:
+            return os.getenv("DB_SERVER") 
+        
+    @computed_field
+    @property
+    def DB_PORT(self) -> str:
+        if settings.is_development:
+            return "1433"
+        else:
+            return os.getenv("DB_PORT")
+
+    @computed_field
+    @property
+    def DB_NAME(self) -> str:
+        if settings.is_development:
+            return "ImageGeneratorDB"
+        else:
+            return os.getenv("DB_NAME")
+
+    @computed_field
+    @property
+    def DB_USER(self) -> str:
+        if settings.is_development:
+            return "sa"
+        else:
+            return os.getenv("DB_USER")
+        
+    @computed_field
+    @property
+    def DB_PASSWORD(self) -> str:
+        if settings.is_development:
+            return "YourStrong@Password123"
+        else:
+            return os.getenv("DB_PASSWORD")
+        
+    @computed_field
+    @property
+    def DB_DRIVER(self) -> str:
+        if settings.is_development:
+            return "ODBC Driver 17 for SQL Server"
+        else:
+            return os.getenv("DB_DRIVER", "ODBC Driver 17 for SQL Server")
     
     # ===== API Keys =====
     HF_TOKEN: str = os.getenv("HF_TOKEN", "")
