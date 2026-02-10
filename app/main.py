@@ -8,7 +8,6 @@ from .routes import (generate_image, get_generation_stream,
 
 
 shutdown_manager.setup_signal_handlers()
-
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(

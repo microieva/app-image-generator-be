@@ -1,6 +1,5 @@
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
-import os
 import time
 from dotenv import load_dotenv
 from sqlalchemy.ext.declarative import declarative_base
@@ -37,32 +36,37 @@ def get_session():
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
     return SessionLocal()
 
-def create_postgresql_engine():
-    """Create PostgreSQL engine for production"""
+def create_prod_engine():
+    """Create MySql engine for production"""
     db_user = settings.DB_USER
     db_password = settings.DB_PASSWORD
     db_host = settings.DB_SERVER
     db_port = settings.DB_PORT
     db_name = settings.DB_NAME
     
-    print(f"🔧 Creating PostgreSQL connection...")
+    print(f"🔧 Creating mysql connection...")
     print(f"   Host: {db_host}:{db_port}")
     print(f"   Database: {db_name}")
     print(f"   User: {db_user}")
     
-    connection_string = f"postgresql://{db_user}:{quote_plus(db_password)}@{db_host}:{db_port}/{db_name}"
+    connection_string = f"mysql+pymysql://{db_user}:{quote_plus(db_password)}@{db_host}:{db_port}/{db_name}"
     
     engine = create_engine(
         connection_string,
         pool_pre_ping=True,
         pool_size=10,
         max_overflow=20,
-        echo=False
+        echo=False,
+        pool_recycle=3600, 
+        connect_args={
+            'charset': 'utf8mb4',
+            'ssl': {'ssl_disabled': True}  # Adjust based on your MySQL setup
+        }
     )
     
     return engine
 
-def create_sqlserver_engine():
+def create_dev_engine():
     """Create SQL Server engine for development"""
     db_user = settings.DB_USER
     db_password = settings.DB_PASSWORD
@@ -103,7 +107,7 @@ def create_sqlserver_engine():
 def create_database_if_not_exists_sqlserver():
     """Create SQL Server database if it doesn't exist (development only)"""
     if IS_PRODUCTION:
-        return True  # PostgreSQL handles this differently
+        return True  # mysql handles this differently
         
     db_user = settings.DB_USER
     db_password = settings.DB_PASSWORD
@@ -152,15 +156,15 @@ def create_engine_with_retry(max_retries=3, retry_delay=2):
     """Create engine with retry logic for both production and development"""
     
     if IS_PRODUCTION:
-        print("🚀 PRODUCTION MODE: Using PostgreSQL")
-        return create_postgresql_engine()
+        print("🚀 PRODUCTION MODE: Using mysql")
+        return create_prod_engine()
     else:
         print("🔧 DEVELOPMENT MODE: Using SQL Server")
         database_created = False
         
         for attempt in range(max_retries):
             try:
-                engine = create_sqlserver_engine()
+                engine = create_dev_engine()
                 
                 with engine.connect() as conn:
                     result = conn.execute(text("SELECT DB_NAME()"))
@@ -258,7 +262,7 @@ def get_db():
 async def initialize_database():
     try:
         if IS_PRODUCTION:
-            print("🚀 Initializing production database (PostgreSQL)...")
+            print("🚀 Initializing production database (mysql)...")
         else:
             print("🔧 Initializing development database (SQL Server)...")
             
@@ -387,42 +391,62 @@ def create_tables_manually(engine):
         """))
         print("✅ Images table created/verified")
 
-
 def create_prod_db_tables(engine):
-
+    """MySQL table creation for production"""
     with engine.begin() as conn:
+        # Create tasks table with MySQL-compatible syntax
+        # SERIAL -> INT AUTO_INCREMENT PRIMARY KEY
+        # VARCHAR stays VARCHAR
+        # INTEGER -> INT
+        # TIMESTAMP -> DATETIME (or TIMESTAMP, but DATETIME avoids MySQL timestamp limitations)
+        # TEXT -> LONGTEXT (for larger text storage)
+        
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS tasks (
-                id SERIAL PRIMARY KEY,
+                id INT AUTO_INCREMENT PRIMARY KEY,
                 task_id VARCHAR(36) UNIQUE NOT NULL,
                 status VARCHAR(20) DEFAULT 'pending',
-                progress INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NULL
-            )
+                progress INT DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NULL,
+                INDEX idx_tasks_task_id (task_id),
+                INDEX idx_tasks_status (status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """))
         print("✅ Tasks table created/verified")
         
+        # Create images table
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS images (
-                id SERIAL PRIMARY KEY,
+                id INT AUTO_INCREMENT PRIMARY KEY,
                 task_id VARCHAR(36) NULL,
-                image_data TEXT,
-                prompt TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                image_data LONGTEXT,
+                prompt LONGTEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_images_task_id (task_id),
                 CONSTRAINT fk_image_task FOREIGN KEY (task_id) 
-                REFERENCES tasks(task_id) ON DELETE SET NULL
-            )
+                REFERENCES tasks(task_id) ON DELETE SET NULL ON UPDATE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """))
         print("✅ Images table created/verified")
         
-        conn.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_tasks_task_id ON tasks(task_id)
-        """))
-        conn.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)
-        """))
-        conn.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_images_task_id ON images(task_id)
-        """))
-        print("✅ Indexes created/verified")
+        # Additional: Create indexes for better performance
+        # MySQL doesn't support CREATE INDEX IF NOT EXISTS, so we check manually
+        inspector = inspect(engine)
+        
+        # Check and create indexes if they don't exist
+        indexes = inspector.get_indexes('tasks')
+        existing_index_names = {idx['name'] for idx in indexes}
+        
+        if 'idx_tasks_created_at' not in existing_index_names:
+            conn.execute(text("CREATE INDEX idx_tasks_created_at ON tasks(created_at DESC)"))
+            print("✅ Created index: idx_tasks_created_at")
+        
+        indexes = inspector.get_indexes('images')
+        existing_index_names = {idx['name'] for idx in indexes}
+        
+        if 'idx_images_created_at' not in existing_index_names:
+            conn.execute(text("CREATE INDEX idx_images_created_at ON images(created_at DESC)"))
+            print("✅ Created index: idx_images_created_at")
+        
+        print("✅ All indexes created/verified")
