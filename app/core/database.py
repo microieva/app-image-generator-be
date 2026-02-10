@@ -210,8 +210,52 @@ def get_db():
     finally:
         db.close()
 
+# async def initialize_database():
+#     """Initialize database tables based on environment"""
+#     try:
+#         if IS_PRODUCTION:
+#             print("🚀 Initializing production database (PostgreSQL)...")
+#         else:
+#             print("🔧 Initializing development database (SQL Server)...")
+            
+#         engine = get_engine()
+#         print("✅ Database engine ready")
+        
+#         try:
+#             from app.models.db_models import Task, Image
+#             print(f"-- 📋 Registered tables: {list(Base.metadata.tables.keys())}")
+#         except ImportError as e:
+#             print(f"❌ Could not import models: {e}")
+#             print("⚠️  Falling back to manual table creation...")
+#             #return create_tables_manually(engine)
+        
+#         print("🛠️ Creating tables with SQLAlchemy...")
+#         Base.metadata.create_all(bind=engine)
+        
+#         inspector = inspect(engine)
+#         tables = inspector.get_table_names()
+#         print(f"-- 📊 Tables in database: {tables}")
+        
+#         if IS_DEVELOPMENT:
+#             if ('tasks' not in tables or 'images' not in tables):
+#                 print("⚠️  SQLAlchemy creation failed, using manual fallback...")
+#                 create_tables_manually(engine)
+#                 tables = inspector.get_table_names()
+        
+#         for table in ['tasks', 'images']:
+#             if table in tables:
+#                 print(f"✅ Table '{table}' verified")
+#             else:
+#                 print(f"❌ Table '{table}' not found!")
+                
+#         return True
+                
+#     except Exception as e:
+#         print(f"❌ Database initialization failed: {e}")
+#         raise
+    
+
 async def initialize_database():
-    """Initialize database tables based on environment"""
     try:
         if IS_PRODUCTION:
             print("🚀 Initializing production database (PostgreSQL)...")
@@ -224,37 +268,94 @@ async def initialize_database():
         try:
             from app.models.db_models import Task, Image
             print(f"-- 📋 Registered tables: {list(Base.metadata.tables.keys())}")
+            use_sqlalchemy = True
         except ImportError as e:
             print(f"❌ Could not import models: {e}")
             print("⚠️  Falling back to manual table creation...")
-            return False
-            #return create_tables_manually(engine)
+            use_sqlalchemy = False
         
-        print("🛠️ Creating tables with SQLAlchemy...")
-        Base.metadata.create_all(bind=engine)
+        if use_sqlalchemy:
+            print("🛠️ Creating tables with SQLAlchemy...")
+            Base.metadata.create_all(bind=engine)
+            
+            inspector = inspect(engine)
+            tables = inspector.get_table_names()
+            print(f"-- 📊 Tables in database: {tables}")
+            
+            required_tables = {'tasks', 'images'}
+            existing_tables = set(table.lower() for table in tables)
+            
+            missing_tables = required_tables - existing_tables
+            
+            if missing_tables:
+                print(f"⚠️  SQLAlchemy creation incomplete. Missing: {missing_tables}")
+                print("   Using manual table creation fallback...")
+                use_sqlalchemy = False
         
-        inspector = inspect(engine)
-        tables = inspector.get_table_names()
-        print(f"-- 📊 Tables in database: {tables}")
-        
-        if IS_DEVELOPMENT:
-            if ('tasks' not in tables or 'images' not in tables):
-                print("⚠️  SQLAlchemy creation failed, using manual fallback...")
+        if not use_sqlalchemy:
+            print("🛠️ Creating tables manually...")
+            if IS_PRODUCTION:
+                create_prod_db_tables(engine)
+            else:
                 create_tables_manually(engine)
-                tables = inspector.get_table_names()
+            
+            inspector = inspect(engine)
+            tables = inspector.get_table_names()
+            print(f"-- 📊 Tables in database: {tables}")
         
-        for table in ['tasks', 'images']:
-            if table in tables:
+        print("🔍 Verifying all required tables exist...")
+        required_tables = ['tasks', 'images']
+        tables_lower = [table.lower() for table in tables]
+        
+        all_tables_exist = True
+        for table in required_tables:
+            if table in tables_lower:
                 print(f"✅ Table '{table}' verified")
             else:
                 print(f"❌ Table '{table}' not found!")
+                all_tables_exist = False
+        
+        if IS_DEVELOPMENT:
+            print("🔍 Detailed table check for development...")
+            with engine.connect() as conn:
+                try:
+                    conn.execute(text("SELECT TOP 1 * FROM tasks"))
+                    print("✅ Tasks table accessible")
+                except Exception as e:
+                    print(f"⚠️  Tasks table issue: {e}")
+                 
+                try:
+                    conn.execute(text("SELECT TOP 1 * FROM images"))
+                    print("✅ Images table accessible")
+                except Exception as e:
+                    print(f"⚠️  Images table issue: {e}")
+        
+        elif IS_PRODUCTION:
+            print("🔍 Detailed table check for production...")
+            with engine.connect() as conn:
+                try:
+                    conn.execute(text("SELECT * FROM tasks LIMIT 1"))
+                    print("✅ Tasks table accessible")
+                except Exception as e:
+                    print(f"⚠️  Tasks table issue: {e}")
                 
-        return True
+                try:
+                    conn.execute(text("SELECT * FROM images LIMIT 1"))
+                    print("✅ Images table accessible")
+                except Exception as e:
+                    print(f"⚠️  Images table issue: {e}")
+        
+        if all_tables_exist:
+            print("🎉 Database initialization completed successfully!")
+        else:
+            print("⚠️  Database initialization completed with warnings")
+        
+        return all_tables_exist
                 
     except Exception as e:
         print(f"❌ Database initialization failed: {e}")
+        # Re-raise to stop the application if initialization fails
         raise
-    
 
 def create_tables_manually(engine):
     """Manual table creation fallback"""
@@ -285,3 +386,43 @@ def create_tables_manually(engine):
             )
         """))
         print("✅ Images table created/verified")
+
+
+def create_prod_db_tables(engine):
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS tasks (
+                id SERIAL PRIMARY KEY,
+                task_id VARCHAR(36) UNIQUE NOT NULL,
+                status VARCHAR(20) DEFAULT 'pending',
+                progress INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL
+            )
+        """))
+        print("✅ Tasks table created/verified")
+        
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS images (
+                id SERIAL PRIMARY KEY,
+                task_id VARCHAR(36) NULL,
+                image_data TEXT,
+                prompt TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT fk_image_task FOREIGN KEY (task_id) 
+                REFERENCES tasks(task_id) ON DELETE SET NULL
+            )
+        """))
+        print("✅ Images table created/verified")
+        
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_tasks_task_id ON tasks(task_id)
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_images_task_id ON images(task_id)
+        """))
+        print("✅ Indexes created/verified")
