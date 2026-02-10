@@ -16,7 +16,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000", 
         "http://localhost:3001", 
-        "http://172.20.10.5:3000"],
+        "http://172.20.10.5:3000",
+        "https://client-image-generator.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
