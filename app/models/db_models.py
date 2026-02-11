@@ -4,6 +4,8 @@ from sqlalchemy.sql import func
 from sqlalchemy.ext.declarative import declarative_base
 import enum
 
+from app.core.config import settings
+
 Base = declarative_base()
 
 class TaskStatus(enum.Enum):
@@ -16,7 +18,8 @@ class TaskStatus(enum.Enum):
 
 class Task(Base):
     __tablename__ = "tasks"
-    __table_args__ = {'schema': 'dbo'} 
+    if settings.is_development:
+        __table_args__ = {'schema': 'dbo'} 
     
     id = Column(Integer, primary_key=True, index=True)
     task_id = Column(String(36), unique=True, index=True)
@@ -30,7 +33,8 @@ class Task(Base):
 
 class Image(Base):
     __tablename__ = "images"
-    __table_args__ = {'schema': 'dbo'}  
+    if settings.is_development:
+        __table_args__ = {'schema': 'dbo'}   
     
     id = Column(Integer, primary_key=True, index=True)
     task_id = Column(String(36), ForeignKey('dbo.tasks.task_id', ondelete='SET NULL'), unique=True, index=True) 
