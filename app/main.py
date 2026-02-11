@@ -1,4 +1,5 @@
 import logging
+from dotenv import load_dotenv
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -9,9 +10,35 @@ from .routes import (generate_image, get_generation_stream,
                      get_generation_status, cancel_generation,
                      delete_tasks, get_tasks, get_images)
 
-
+load_dotenv() 
 shutdown_manager.setup_signal_handlers()
 app = FastAPI(lifespan=lifespan)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Prevent server crash by catching all unhandled exceptions"""
+    
+    # Log the full error
+    logger.error("="*80)
+    logger.error(f"💥 UNHANDLED EXCEPTION: {type(exc).__name__}")
+    logger.error(f"Request: {request.method} {request.url}")
+    logger.error(f"Error: {str(exc)}")
+    logger.error("Stack trace:")
+    logger.error(traceback.format_exc())
+    logger.error("="*80)
+    
+    # Return a friendly error response
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "message": "An unexpected error occurred. The server is still running."
+        },
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
 
 app.add_middleware(
     CORSMiddleware,

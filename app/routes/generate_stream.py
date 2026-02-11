@@ -1,15 +1,20 @@
 import datetime
 import json
+import os
+import sys
 import aiohttp
+from dotenv import load_dotenv
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 import logging
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from app.core.config import settings
 from app.core.database import get_db
 from app.events.db_events import update_task_in_db, save_image_to_db
 from app.schemas.schemas import GenerationResult
-
+load_dotenv() 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 

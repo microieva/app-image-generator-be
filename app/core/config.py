@@ -61,7 +61,7 @@ class Settings(BaseSettings):
             return os.getenv("DB_DRIVER", "ODBC Driver 17 for SQL Server")
     
     # ===== API Keys =====
-    HF_TOKEN: str = os.getenv("HF_TOKEN")
+    HF_TOKEN: str = os.getenv("HF_TOKEN", "")
     HF_SPACE_URL: str = os.getenv("HF_SPACE_URL", "https://microieva-generator.hf.space")
     
     GROQ_API_KEY: Optional[str] = Field(

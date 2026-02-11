@@ -1,20 +1,26 @@
 from datetime import datetime
+import os
+import sys
 import time
+from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import requests
 from requests.exceptions import Timeout, RequestException, HTTPError, ConnectionError
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from app.events.db_events import save_task_to_db
 from app.schemas.schemas import GenerateRequest, GenerationResponse
 from app.core.database import get_db
 from app.core.config import settings
 from app.schemas.errors import SpaceAPIError
 
+load_dotenv() 
+
 router = APIRouter()
 
 @router.post("/generate")
-def generate_image(
+async def generate_image(
     generate_request: GenerateRequest,
     db: Session = Depends(get_db),
     timeout:int = settings.REQUEST_TIMEOUT

@@ -1,7 +1,12 @@
 import logging
+import os
+import sys
+from dotenv import load_dotenv
 from fastapi import APIRouter
 import requests
 from app.schemas.schemas import CancellationResponse
+load_dotenv() 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))    
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
