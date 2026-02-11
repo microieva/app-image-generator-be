@@ -60,7 +60,7 @@ def create_prod_engine():
         pool_recycle=3600, 
         connect_args={
             'charset': 'utf8mb4',
-            'ssl': {'ssl_disabled': True}  # Adjust based on your MySQL setup
+            'ssl': {'ssl_disabled': True} 
         }
     )
     
@@ -107,7 +107,7 @@ def create_dev_engine():
 def create_database_if_not_exists_sqlserver():
     """Create SQL Server database if it doesn't exist (development only)"""
     if IS_PRODUCTION:
-        return True  # mysql handles this differently
+        return True 
         
     db_user = settings.DB_USER
     db_password = settings.DB_PASSWORD
@@ -212,52 +212,7 @@ def get_db():
     try:
         yield db
     finally:
-        db.close()
-
-# async def initialize_database():
-#     """Initialize database tables based on environment"""
-#     try:
-#         if IS_PRODUCTION:
-#             print("🚀 Initializing production database (PostgreSQL)...")
-#         else:
-#             print("🔧 Initializing development database (SQL Server)...")
-            
-#         engine = get_engine()
-#         print("✅ Database engine ready")
-        
-#         try:
-#             from app.models.db_models import Task, Image
-#             print(f"-- 📋 Registered tables: {list(Base.metadata.tables.keys())}")
-#         except ImportError as e:
-#             print(f"❌ Could not import models: {e}")
-#             print("⚠️  Falling back to manual table creation...")
-#             #return create_tables_manually(engine)
-        
-#         print("🛠️ Creating tables with SQLAlchemy...")
-#         Base.metadata.create_all(bind=engine)
-        
-#         inspector = inspect(engine)
-#         tables = inspector.get_table_names()
-#         print(f"-- 📊 Tables in database: {tables}")
-        
-#         if IS_DEVELOPMENT:
-#             if ('tasks' not in tables or 'images' not in tables):
-#                 print("⚠️  SQLAlchemy creation failed, using manual fallback...")
-#                 create_tables_manually(engine)
-#                 tables = inspector.get_table_names()
-        
-#         for table in ['tasks', 'images']:
-#             if table in tables:
-#                 print(f"✅ Table '{table}' verified")
-#             else:
-#                 print(f"❌ Table '{table}' not found!")
-                
-#         return True
-                
-#     except Exception as e:
-#         print(f"❌ Database initialization failed: {e}")
-#         raise
-    
+        db.close() 
 
 async def initialize_database():
     try:
@@ -369,6 +324,7 @@ def create_tables_manually(engine):
             CREATE TABLE tasks (
                 id INT IDENTITY(1,1) PRIMARY KEY,
                 task_id NVARCHAR(36) UNIQUE NOT NULL,
+                prompt NVARCHAR(MAX),
                 status NVARCHAR(20) DEFAULT 'pending',
                 progress INT DEFAULT 0,
                 created_at DATETIME2 DEFAULT GETDATE(),
@@ -394,17 +350,12 @@ def create_tables_manually(engine):
 def create_prod_db_tables(engine):
     """MySQL table creation for production"""
     with engine.begin() as conn:
-        # Create tasks table with MySQL-compatible syntax
-        # SERIAL -> INT AUTO_INCREMENT PRIMARY KEY
-        # VARCHAR stays VARCHAR
-        # INTEGER -> INT
-        # TIMESTAMP -> DATETIME (or TIMESTAMP, but DATETIME avoids MySQL timestamp limitations)
-        # TEXT -> LONGTEXT (for larger text storage)
         
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS tasks (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 task_id VARCHAR(36) UNIQUE NOT NULL,
+                prompt LONGTEXT,
                 status VARCHAR(20) DEFAULT 'pending',
                 progress INT DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -415,7 +366,6 @@ def create_prod_db_tables(engine):
         """))
         print("✅ Tasks table created/verified")
         
-        # Create images table
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS images (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -430,11 +380,8 @@ def create_prod_db_tables(engine):
         """))
         print("✅ Images table created/verified")
         
-        # Additional: Create indexes for better performance
-        # MySQL doesn't support CREATE INDEX IF NOT EXISTS, so we check manually
         inspector = inspect(engine)
         
-        # Check and create indexes if they don't exist
         indexes = inspector.get_indexes('tasks')
         existing_index_names = {idx['name'] for idx in indexes}
         
