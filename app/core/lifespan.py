@@ -24,10 +24,10 @@ async def lifespan(app: FastAPI):
     
     yield  
 
-    logger.info("🛑 Application shutting down...")
-    if hasattr(app.state, 'scheduler'):
-        app.state.scheduler.shutdown_scheduler()
+    # logger.info("🛑 Application shutting down...")
+    # if hasattr(app.state, 'scheduler'):
+    #     app.state.scheduler.shutdown_scheduler()
     
-    await shutdown_manager.run_cleanup()
+    # await shutdown_manager.run_cleanup()
     
-    logger.info("✅ Application shutdown complete")
+    # logger.info("✅ Application shutdown complete")
