@@ -30,5 +30,9 @@ app.include_router(delete_tasks)
 app.include_router(get_tasks)
 app.include_router(get_images)  
 
+@app.route("/")
+async def root():
+    return {"message": "App server running"}
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

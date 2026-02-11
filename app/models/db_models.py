@@ -37,7 +37,15 @@ class Image(Base):
         __table_args__ = {'schema': 'dbo'}   
     
     id = Column(Integer, primary_key=True, index=True)
-    task_id = Column(String(36), ForeignKey('dbo.tasks.task_id', ondelete='SET NULL'), unique=True, index=True) 
+    task_id = Column(
+        String(36),
+        ForeignKey(
+            'dbo.tasks.task_id' if settings.is_development else 'tasks.task_id',
+            ondelete='SET NULL'
+        ),
+        unique=True,
+        index=True
+    )
     image_data = Column(Text, nullable=True)
     prompt = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
