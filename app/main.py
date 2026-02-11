@@ -30,7 +30,7 @@ app.include_router(delete_tasks)
 app.include_router(get_tasks)
 app.include_router(get_images)  
 
-@app.route("/")
+@app.get("/")
 async def root():
     return {"message": "App server running"}
 
