@@ -14,7 +14,7 @@ from app.schemas.errors import SpaceAPIError
 router = APIRouter()
 
 @router.post("/generate")
-async def generate_image(
+def generate_image(
     generate_request: GenerateRequest,
     db: Session = Depends(get_db),
     timeout:int = settings.REQUEST_TIMEOUT
