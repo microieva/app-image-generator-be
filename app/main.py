@@ -1,3 +1,4 @@
+import logging
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -23,22 +24,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    print(f"Unhandled exception: {exc}")
-    traceback.print_exc()
+# Add request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logger.info(f"📨 Incoming request: {request.method} {request.url}")
     
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"},
-        headers={
-            "Access-Control-Allow-Origin": "https://client-image-generator.vercel.app",
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Allow-Methods": "*",
-            "Access-Control-Allow-Headers": "*",
-        }
-    )
+    if request.method == "POST" and request.url.path == "/generate":
+        try:
+            body = await request.json()
+            logger.info(f"📦 /generate request body: {body}")
+        except:
+            logger.info("📦 /generate request (could not parse body)")
+    
+    try:
+        response = await call_next(request)
+        logger.info(f"📤 Response: {response.status_code} for {request.method} {request.url.path}")
+        return response
+    except Exception as e:
+        logger.error(f"💥 Unhandled error in {request.method} {request.url.path}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise
 
 app.include_router(generate_image)
 app.include_router(get_generation_stream)
