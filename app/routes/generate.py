@@ -40,13 +40,18 @@ def generate_image(
     
     if generate_request.prompt:
       try:
-        requests.get(
+        health = requests.get(
           f"{settings.HF_SPACE_URL}/health",
           headers={
             "Authorization": f"Bearer {settings.HF_TOKEN}",
             "Accept": "application/json"
           }
         )
+        if health.status_code != 200:
+          raise SpaceAPIError(f"Space API health check failed with status code {health.status_code}")
+        
+      except Timeout as e:
+        raise SpaceAPIError(f"Space API health check timed out after {timeout} seconds")
       except Exception as e:
         raise SpaceAPIError(f"Failed to connect to Space API for health check: {str(e)}")
     else: 
@@ -88,7 +93,10 @@ def generate_image(
         timeout=timeout
       )
 
-      response_json = generate_response.json()
+      if generate_response.status_code == 200: 
+        response_json = generate_response.json()
+      else:
+        raise SpaceAPIError(f"Space API returned status code {generate_response.status_code}")
 
       response_data = {
           "status": response_json.get('status', 'unknown'),
