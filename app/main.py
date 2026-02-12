@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 from app.core import shutdown_manager, lifespan
 from app.routes import (generate_image, get_generation_stream, 
                      get_generation_status, cancel_generation,
-                     delete_tasks, get_tasks, get_images)
+                     delete_tasks, get_tasks, get_images, health_check)
 
 shutdown_manager.setup_signal_handlers()
 app = FastAPI(lifespan=lifespan)
@@ -36,6 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(health_check)
 app.include_router(generate_image)
 app.include_router(get_generation_stream)
 app.include_router(get_generation_status)

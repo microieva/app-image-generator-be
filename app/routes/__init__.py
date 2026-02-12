@@ -6,6 +6,7 @@ from .images import router as get_images
 from .task_status import router as get_generation_status
 from .generate_stream import router as get_generation_stream
 from .cancel_generation import router as cancel_generation
+from .health_check import router as health_check
 
 __all__ = [
   'get_images', 
@@ -14,5 +15,6 @@ __all__ = [
   'get_tasks', 
   'get_generation_status', 
   'get_generation_stream', 
-  'delete_tasks'
+  'delete_tasks',
+  'health_check'
 ]
