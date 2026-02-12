@@ -7,4 +7,12 @@ from .task_status import router as get_generation_status
 from .generate_stream import router as get_generation_stream
 from .cancel_generation import router as cancel_generation
 
-__all__ = ['get_images', 'cancel_generation', 'generate_image', 'task_status', 'get_tasks', 'get_generation_status', 'get_generation_stream', 'delete_tasks']
+__all__ = [
+  'get_images', 
+  'cancel_generation', 
+  'generate_image', 
+  'get_tasks', 
+  'get_generation_status', 
+  'get_generation_stream', 
+  'delete_tasks'
+]

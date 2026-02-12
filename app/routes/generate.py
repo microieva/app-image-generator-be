@@ -21,14 +21,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.post("/generate")
-async def generate_image(
+def generate_image(
     generate_request: GenerateRequest,
     db: Session = Depends(get_db),
     timeout:int = settings.REQUEST_TIMEOUT
 ):
-    
-    logger.info(f"📨 REQUEST INSIDE ENDPOINT: {generate_request}")
-
     if not generate_request.prompt or generate_request.prompt.strip() == "":
       raise HTTPException(
           status_code=400,
