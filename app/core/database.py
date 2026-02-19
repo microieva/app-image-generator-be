@@ -62,9 +62,14 @@ def create_prod_engine():
         max_overflow=20,
         echo=False,
         pool_recycle=3600, 
+        pool_pre_ping=True, 
         connect_args={
             'charset': 'utf8mb4',
-            'ssl': {'ssl_disabled': True} 
+            'ssl': {'ssl_disabled': True},
+            "keepalives": 1,
+            "keepalives_idle": 30,
+            "keepalives_interval": 10,
+            "keepalives_count": 5 
         }
     )
     
