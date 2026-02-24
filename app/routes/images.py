@@ -28,6 +28,7 @@ async def get_images(
                 "task_id": image.task_id,
                 "prompt": image.prompt,
                 "image_url": image.image_data,
+                "model_used": image.model_used,
                 "created_at": image.created_at.isoformat() if image.created_at else None
             })
         

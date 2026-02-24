@@ -48,6 +48,7 @@ class Image(Base):
     )
     image_data = Column(Text, nullable=True)
     prompt = Column(Text, nullable=True)
+    model_used = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     task = relationship("Task", back_populates="image", passive_deletes=True)

@@ -51,7 +51,8 @@ def save_image_to_db(result: GenerationResult, db: Session):
         image = Image(
             task_id=result.task_id,   
             image_data=result.image_data, 
-            prompt=result.prompt        
+            prompt=result.prompt,
+            model_used=result.model_used        
         )
         db.add(image)
         db.commit()

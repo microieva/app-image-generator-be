@@ -42,6 +42,7 @@ class GenerationResult(BaseModel):
     prompt: str
     total_inference_time: Optional[float] = None
     completed_at: Optional[str] = None
+    model_used: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -51,6 +52,7 @@ class ImageResponse(BaseModel):
     task_id: str
     image_url: str
     prompt: str
+    model_used: Optional[str] = None
     created_at: datetime
 
     class Config:
