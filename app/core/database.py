@@ -64,11 +64,7 @@ def create_prod_engine():
         pool_recycle=3600, 
         connect_args={
             'charset': 'utf8mb4',
-            'ssl': {'ssl_disabled': True},
-            "keepalives": 1,
-            "keepalives_idle": 30,
-            "keepalives_interval": 10,
-            "keepalives_count": 5 
+            'ssl': {'ssl_disabled': True}
         }
     )
     
