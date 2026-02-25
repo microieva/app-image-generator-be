@@ -65,7 +65,7 @@ def process_complete_message(task_id: str, message_str: str, db: Session):
                 
                 if "status" in data:
                     status = data["status"]
-                    progress = int(round(float(data.get("progress", 100))))
+                    progress = int(float(data.get("progress", 100)) + 0.5)
                     update_task_in_db(task_id, {"status": status, "progress": progress}, db)
                     
                     if status == "completed":    
