@@ -74,7 +74,7 @@ def process_complete_message(task_id: str, message_str: str, db: Session):
                                 task_id=task_id,
                                 image_data=data["result"]["image"],
                                 prompt=data["result"]["prompt"],
-                                model_used=data["result"]["model_used"],
+                                model_used = data["result"].get("model_used", None),
                                 total_inference_time=data["result"]["total_inference_time"],
                                 completed_at=datetime.datetime.now().isoformat()
                             )
