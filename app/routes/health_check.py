@@ -39,8 +39,7 @@ async def health_check():
         response = requests.get(
           f"{settings.HF_SPACE_URL}/health",
           headers={
-            "Authorization": f"Bearer {settings.HF_TOKEN}",
-            #"Accept": "application/json"
+            "Authorization": f"Bearer {settings.HF_TOKEN}"
           }
         )
         results["connection_tests"]["basic_https"] = {
@@ -54,7 +53,7 @@ async def health_check():
     if settings.HF_TOKEN:
         try:
             response = requests.get(
-                f"{settings.HF_SPACE_URL}/public-health",
+                f"{settings.HF_SPACE_URL}/health",
                 headers={"Authorization": f"Bearer {settings.HF_TOKEN}"},
                 timeout=10
             )
