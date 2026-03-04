@@ -72,6 +72,7 @@ def generate_image(
     space_request = {
         "task_id": task_id,
         "prompt": generate_request.prompt,
+        "model": generate_request.model,
         "negative_prompt": generate_request.negative_prompt or "", 
         "num_inference_steps": generate_request.num_inference_steps or 20,
         "guidance_scale": generate_request.guidance_scale or 7.5,

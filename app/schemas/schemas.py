@@ -5,6 +5,7 @@ from datetime import datetime
 
 class GenerateRequest(BaseModel):
     prompt: str
+    model: str
     negative_prompt: Optional[str] = None
     num_inference_steps: Optional[int] = 20
     guidance_scale: Optional[float] = 7.5
